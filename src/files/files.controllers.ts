@@ -1,18 +1,18 @@
-import { createFactory } from 'hono/factory';
+import { createFactory } from "hono/factory";
 
-import { zValidator } from '@hono/zod-validator';
+import { zValidator } from "@hono/zod-validator";
 
-import { z } from 'zod';
+import { z } from "zod";
 
-import { Bindings } from '../types/bindings';
-import { createAPIResponse } from '../utils/api-response-helper';
+import { Bindings } from "../types/bindings";
+import { createAPIResponse } from "../utils/api-response-helper";
 import {
   deleteFileService,
   listFilesService,
   listFoldersService,
   updateFileService,
   uploadFilesService,
-} from './files.services';
+} from "./files.services";
 
 const factory = createFactory<{
   Bindings: Bindings;
@@ -21,35 +21,35 @@ const factory = createFactory<{
 // LIST FILE
 export const listFiles = factory.createHandlers(
   zValidator(
-    'json',
+    "json",
     z.object({
       folder: z.string().optional(),
       cursor: z.string().optional(),
       limit: z.string().optional(),
-    }),
+    })
   ),
   async (c) => {
-    const { folder, cursor, limit } = c.req.valid('json');
+    const { folder, cursor, limit } = c.req.valid("json");
 
     try {
       const data = await listFilesService(c, folder, cursor, limit);
 
       return c.json(
         createAPIResponse({
-          status: 'success',
+          status: "success",
           data: data.files,
-        }),
+        })
       );
     } catch (error) {
       return c.json(
         createAPIResponse({
-          status: 'error',
+          status: "error",
           error: error as Error,
           message: (error as Error).message,
-        }),
+        })
       );
     }
-  },
+  }
 );
 
 // UPLOAD FILE
@@ -57,24 +57,24 @@ export const uploadFile = factory.createHandlers(async (c) => {
   const body = await c.req.parseBody();
 
   const files = Object.values(body).filter(
-    (value) => value instanceof File,
+    (value) => value instanceof File
   ) as File[];
 
-  const path = body['path'] as string;
+  const path = body["path"] as string;
 
   try {
     const urls = await uploadFilesService(c, files, path);
 
-    return c.json(createAPIResponse({ status: 'success', data: urls }));
+    return c.json(createAPIResponse({ status: "success", data: urls }));
   } catch (error) {
     console.error(error);
 
     return c.json(
       createAPIResponse({
-        status: 'error',
+        status: "error",
         error: error as Error,
         message: (error as Error).message,
-      }),
+      })
     );
   }
 });
@@ -82,13 +82,13 @@ export const uploadFile = factory.createHandlers(async (c) => {
 // UPDATE FILE
 export const updateFile = factory.createHandlers(
   zValidator(
-    'form',
+    "form",
     z.object({
       oldPath: z.string(),
       file: z.instanceof(File),
       newPath: z.string(),
       fileName: z.string().optional(),
-    }),
+    })
   ),
   async (c) => {
     const body = await c.req.parseBody();
@@ -96,52 +96,52 @@ export const updateFile = factory.createHandlers(
     try {
       const updatedFile = await updateFileService(
         c,
-        body['oldPath'] as string,
-        body['file'] as File,
-        body['newPath'] as string,
-        body['fileName'] as string,
+        body["oldPath"] as string,
+        body["file"] as File,
+        body["newPath"] as string,
+        body["fileName"] as string
       );
 
       return c.json(
-        createAPIResponse({ status: 'success', data: updatedFile }),
+        createAPIResponse({ status: "success", data: updatedFile })
       );
     } catch (error) {
       return c.json(
         createAPIResponse({
-          status: 'error',
+          status: "error",
           error: error as Error,
           message: (error as Error).message,
-        }),
+        })
       );
     }
-  },
+  }
 );
 
 // DELETE FILE
 export const deleteFile = factory.createHandlers(
   zValidator(
-    'json',
+    "json",
     z.object({
       path: z.string(),
-    }),
+    })
   ),
   async (c) => {
-    const { path } = c.req.valid('json');
+    const { path } = c.req.valid("json");
 
     try {
       const deletedFile = await deleteFileService(c, path);
 
-      return c.json(createAPIResponse({ status: 'success' }));
+      return c.json(createAPIResponse({ status: "success" }));
     } catch (error) {
       return c.json(
         createAPIResponse({
-          status: 'error',
+          status: "error",
           error: error as Error,
           message: (error as Error).message,
-        }),
+        })
       );
     }
-  },
+  }
 );
 
 // LIST FOLDERS
@@ -156,85 +156,77 @@ export const getFolders = factory.createHandlers(
     try {
       // Inicia a recursão a partir da key informada
       const folderData = await listFoldersService(c);
-      return c.json(createAPIResponse({ status: 'success', data: folderData }));
+      return c.json(createAPIResponse({ status: "success", data: folderData }));
     } catch (error) {
       return c.json(
         createAPIResponse({
-          status: 'error',
+          status: "error",
           error: error as Error,
           message: (error as Error).message,
-        }),
+        })
       );
     }
-  },
+  }
 );
+
+const DosyaFolderZod: z.ZodType<any> = z.lazy(() => z.object({}));
 
 // CREATE FOLDER
 export const createFolder = factory.createHandlers(
   zValidator(
-    'json',
+    "json",
     z.object({
-      name: z.string(),
-    }),
+      key: z.string(),
+      metadata: z.record(z.string()).optional(),
+    })
   ),
   async (c) => {
-    const { name } = c.req.valid('json');
-
-    const metadata = {
-      tags: ['importante', 'trabalho'],
-      color: '#ff5733',
-      createdAt: new Date().toISOString(),
-    };
+    const { key, metadata } = c.req.valid("json");
 
     try {
       const data = await (c.env as Bindings).BUCKET.put(
-        `${name}/.config.json`,
+        `${key}/.config.json`,
         JSON.stringify(metadata),
         {
           httpMetadata: {
-            contentType: 'application/json',
+            contentType: "application/json",
           },
-        },
+        }
       );
 
       const response = {
         ...(await listFoldersService(c)),
-        data,
+        // data -- the object crated
       };
 
       return c.json(
         createAPIResponse({
-          status: 'success',
+          status: "success",
           data: response,
-        }),
+        })
       );
     } catch (error) {
       return c.json(
         createAPIResponse({
-          status: 'error',
+          status: "error",
           error: error as Error,
           message: (error as Error).message,
-        }),
+        })
       );
     }
-  },
+  }
 );
 
 // DELETE FOLDER
 export const deleteFolder = factory.createHandlers(
   zValidator(
-    'json',
+    "json",
     z.object({
       folder: z.string(),
-    }),
+    })
   ),
   async (c) => {
-    // const user = c.get("user");
-    // if (!user) {
-    //   throw new Error("Unauthorized");
-    // }
-
-    const { folder } = c.req.valid('json');
+    const { folder } = c.req.valid("json");
 
     try {
       const listResponse = await (c.env as Bindings).BUCKET.list({
@@ -243,20 +235,24 @@ export const deleteFolder = factory.createHandlers(
 
       // Para cada objeto encontrado, chama delete
       const deletePromises = listResponse.objects.map((obj: any) =>
-        (c.env as Bindings).BUCKET.delete(obj.key),
+        (c.env as Bindings).BUCKET.delete(obj.key)
       );
 
       const results = await Promise.all(deletePromises);
 
-      return c.json(createAPIResponse({ status: 'success' }));
+      const response = {
+        ...(await listFoldersService(c)),
+      };
+
+      return c.json(createAPIResponse({ status: "success", data: response }));
     } catch (error) {
       return c.json(
         createAPIResponse({
-          status: 'error',
+          status: "error",
           error: error as Error,
           message: (error as Error).message,
-        }),
+        })
       );
     }
-  },
+  }
 );
